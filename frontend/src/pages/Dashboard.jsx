@@ -136,15 +136,19 @@ export default function CalpyDashboard() {
   const navigate = useNavigate();
   const [user, setUser] = useState(JSON.parse(localStorage.getItem("user")) || { username: "Unknown" });
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [goals, setGoals] = useState(JSON.parse(localStorage.getItem("calpy_goals")) || { daily: 1980, protein: 150, carbs: 220, fat: 65 });
-  const [isEditing, setIsEditing] = useState(false);
+  const goalsKey = `calpy_goals_${user.username}`;
+  const entriesKey = `calpy_entries_${user.username}`;
 
-  const [entries, setEntries] = useState(
-    JSON.parse(localStorage.getItem("calpy_entries")) || []
-  );
+  const [goals, setGoals] = useState(JSON.parse(localStorage.getItem(goalsKey)) || { daily: 1980, protein: 150, carbs: 220, fat: 65 });
+  const [entries, setEntries] = useState(JSON.parse(localStorage.getItem(entriesKey)) || []);
+
+
   useEffect(() => {
-    localStorage.setItem("calpy_entries", JSON.stringify(entries));
-  }, [entries]);
+    localStorage.setItem(entriesKey, JSON.stringify(entries));
+  }, [entries, entriesKey]);
+
+
+  const [isEditing, setIsEditing] = useState(false);
 
   const [mode, setMode] = useState('idle');
   const [img, setImg] = useState(null);
@@ -229,7 +233,7 @@ export default function CalpyDashboard() {
                 <div><label style={{ fontSize: '0.8rem', color: 'var(--t2' }}>C(g)</label><input className="input-box" type="number" value={goals.carbs} onChange={e => setGoals({ ...goals, carbs: e.target.value })} /></div>
                 <div><label style={{ fontSize: '0.8rem', color: 'var(--t2' }}>F(g)</label><input className="input-box" type="number" value={goals.fat} onChange={e => setGoals({ ...goals, fat: e.target.value })} /></div>
               </div>
-              <button className="btn-main" onClick={() => { localStorage.setItem("calpy_goals", JSON.stringify(goals)); setIsEditing(false); }}>Save Goal</button>
+              <button className="btn-main" onClick={() => { localStorage.setItem(goalsKey, JSON.stringify(goals)); setIsEditing(false); }}>Save Goal</button>
             </div>
           ) : (
             <div className="card">
