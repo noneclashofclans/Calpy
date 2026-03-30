@@ -15,7 +15,8 @@ const LandingPage = () => {
     }, []);
 
     const handleLogout = () => {
-        localStorage.clear();
+        localStorage.removeItem('user');
+        localStorage.removeItem('token');
         setUser(null);
         setDropdownOpen(false);
         navigate("/");
@@ -1043,7 +1044,6 @@ const LandingPage = () => {
                                     { name: 'Protein', pct: 72, fill: '#6bc46b' },
                                     { name: 'Carbs', pct: 55, fill: '#e8ff6e' },
                                     { name: 'Fat', pct: 40, fill: '#f0a500' },
-                                    { name: 'Fiber', pct: 88, fill: '#60c4d4' },
                                 ].map(m => (
                                     <div className="macro-row" key={m.name}>
                                         <span className="macro-name">{m.name}</span>
@@ -1063,40 +1063,25 @@ const LandingPage = () => {
                         <div className="kicker-bar" />
                         <span className="kicker-text">Pricing</span>
                     </div>
-                    <h2 className="section-title">Simple, honest pricing.</h2>
-                    <p className="section-sub">Start free. Upgrade when you're ready.</p>
-
+                    <h2 className="section-title">It's Free!</h2>
+                    
                     <div className="pricing-grid">
                         <div className="pricing-card">
                             <div className="pricing-plan">Free</div>
                             <div className="pricing-price">$0 <span>/ forever</span></div>
                             <div className="pricing-desc">Everything you need to get started tracking your nutrition.</div>
                             <ul className="pricing-features">
-                                {['Calorie & macro tracking', 'Food database access', 'Daily & weekly summaries', '1 custom goal'].map(f => (
+                                {['Calorie & macro tracking', 'Food database access', 'Daily & weekly summaries', 'Unlimited custom goals'].map(f => (
                                     <li className="pricing-feature" key={f}>
                                         <span className="pricing-feature-dot" />
                                         {f}
                                     </li>
                                 ))}
                             </ul>
-                            <Link to="/register" className="pricing-btn pricing-btn-outline">Get started free</Link>
+                            <Link to="/register" className="pricing-btn pricing-btn-outline" style={{background: "#ddf74f", color: 'black'}}>Get started free</Link>
                         </div>
 
-                        <div className="pricing-card featured">
-                            <div className="pricing-badge">Pro</div>
-                            <div className="pricing-plan">Unlimited</div>
-                            <div className="pricing-price">$6 <span>/ month</span></div>
-                            <div className="pricing-desc">Advanced tools for serious tracking and faster results.</div>
-                            <ul className="pricing-features">
-                                {['Everything in Free', 'Barcode scanner', 'Custom recipes & meals', 'Progress charts & trends', 'Hydration tracking', 'Priority support'].map(f => (
-                                    <li className="pricing-feature" key={f}>
-                                        <span className="pricing-feature-dot" />
-                                        {f}
-                                    </li>
-                                ))}
-                            </ul>
-                            <Link to="/register" className="pricing-btn pricing-btn-filled">Start free trial</Link>
-                        </div>
+                        
                     </div>
                 </section>
 

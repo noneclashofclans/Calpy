@@ -76,16 +76,34 @@ const CSS = `
   @media (max-width: 1100px) { .body { grid-template-columns: 1fr; } }
 `;
 
+
 async function analyzeFood(base64) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${VITE_GEMINI_API_KEY}`;
-  
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${VITE_GEMINI_API_KEY}`;
+
   const payload = {
     contents: [{
       parts: [
-        { text: "Analyze the food in this image. Return strictly JSON data with no markdown code blocks: {\"isFood\":true,\"foodName\":\"...\",\"calories\":123,\"protein\":10,\"carbs\":20,\"fat\":5}" },
-        { inline_data: { mime_type: "image/jpeg", data: base64 } }
+        {
+          text: `You are a nutrition analysis expert. The user is logging their meals.
+Analyze this food image and return nutrition data.
+IMPORTANT: Almost every image will contain food. Be generous in your identification.
+Even if the food is partial, packaged, or in a dish — still identify it.
+Only return isFood:false if the image is clearly non-food (e.g. a person, landscape, document).
+Return ONLY this JSON with no explanation:
+{"isFood":true,"foodName":"name of food","calories":300,"protein":10,"carbs":40,"fat":8}`
+        },
+        {
+          inline_data: {
+            mime_type: "image/jpeg",
+            data: base64
+          }
+        }
       ]
-    }]
+    }],
+    generationConfig: {
+      thinkingConfig: { thinkingBudget: 0 },
+      responseMimeType: "application/json"
+    }
   };
 
   const response = await fetch(url, {
@@ -94,26 +112,40 @@ async function analyzeFood(base64) {
     body: JSON.stringify(payload)
   });
 
+  const data = await response.json();
+  console.log("RAW API RESPONSE:", JSON.stringify(data, null, 2));
+
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error?.message || "Analysis failed");
+    throw new Error(data.error?.message || "Analysis failed");
   }
 
-  const data = await response.json();
-  const text = data.candidates[0].content.parts[0].text;
-  
-  const cleanJsonString = text.replace(/```json|```/g, "").trim();
-  return JSON.parse(cleanJsonString);
+  const parts = data.candidates?.[0]?.content?.parts || [];
+  console.log("PARTS:", parts);
+
+  const textPart = parts.find(p => p.text && !p.thought);
+  const text = textPart?.text || "{}";
+  console.log("TEXT:", text);
+
+  const clean = text.replace(/```json|```/g, "").trim();
+  const parsed = JSON.parse(clean);
+  console.log("PARSED:", parsed);
+  return parsed;
 }
 
 export default function CalpyDashboard() {
   const navigate = useNavigate();
-  const [user] = useState(JSON.parse(localStorage.getItem("user")) || { username: "Rishit" });
+  const [user, setUser] = useState(JSON.parse(localStorage.getItem("user")) || { username: "Unknown" });
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [goals, setGoals] = useState(JSON.parse(localStorage.getItem("calpy_goals")) || { daily: 1980, protein: 150, carbs: 220, fat: 65 });
   const [isEditing, setIsEditing] = useState(false);
 
-  const [entries, setEntries] = useState([]);
+  const [entries, setEntries] = useState(
+    JSON.parse(localStorage.getItem("calpy_entries")) || []
+  );
+  useEffect(() => {
+    localStorage.setItem("calpy_entries", JSON.stringify(entries));
+  }, [entries]);
+
   const [mode, setMode] = useState('idle');
   const [img, setImg] = useState(null);
   const [result, setResult] = useState(null);
@@ -151,10 +183,18 @@ export default function CalpyDashboard() {
       const data = await analyzeFood(img.split(',')[1]);
       setResult(data);
       setMode(data.isFood ? 'result' : 'notfood');
-    } catch (e) { 
-      alert(e.message); 
-      setMode('idle'); 
+    } catch (e) {
+      alert(e.message);
+      setMode('idle');
     }
+  };
+
+  const handleLogout = (e) => {
+    if (e) e.stopPropagation();
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+    setUser(null);
+    navigate('/login');
   };
 
   return (
@@ -172,7 +212,7 @@ export default function CalpyDashboard() {
           <span className="t-name" style={{ fontSize: '0.8rem' }}>{user.username}</span>
           <div className={`dropdown-menu ${dropdownOpen ? 'show' : ''}`}>
             <button className="dropdown-item" onClick={() => setIsEditing(true)}>Set/Edit Goals</button>
-            <button className="dropdown-item text-danger" onClick={() => { localStorage.clear(); navigate("/"); }}>Logout</button>
+            <button className="dropdown-item text-danger" onClick={handleLogout}>Logout</button>
           </div>
         </div>
       </header>
@@ -182,12 +222,12 @@ export default function CalpyDashboard() {
           {isEditing ? (
             <div className="card">
               <div className="card-label">Customize your goal</div>
-              <label style={{fontSize: '0.7rem', color: 'var(--t2)'}}>CALORIES</label>
-              <input className="input-box" type="number" value={goals.daily} onChange={e => setGoals({...goals, daily: e.target.value})} />
-              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'8px'}}>
-                <div><label style={{fontSize: '0.8rem', color: 'var(--t2'}}>P(g)</label><input className="input-box" type="number" value={goals.protein} onChange={e => setGoals({...goals, protein: e.target.value})} /></div>
-                <div><label style={{fontSize: '0.8rem', color: 'var(--t2'}}>C(g)</label><input className="input-box" type="number" value={goals.carbs} onChange={e => setGoals({...goals, carbs: e.target.value})} /></div>
-                <div><label style={{fontSize: '0.8rem', color: 'var(--t2'}}>F(g)</label><input className="input-box" type="number" value={goals.fat} onChange={e => setGoals({...goals, fat: e.target.value})} /></div>
+              <label style={{ fontSize: '0.7rem', color: 'var(--t2)' }}>CALORIES</label>
+              <input className="input-box" type="number" value={goals.daily} onChange={e => setGoals({ ...goals, daily: e.target.value })} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                <div><label style={{ fontSize: '0.8rem', color: 'var(--t2' }}>P(g)</label><input className="input-box" type="number" value={goals.protein} onChange={e => setGoals({ ...goals, protein: e.target.value })} /></div>
+                <div><label style={{ fontSize: '0.8rem', color: 'var(--t2' }}>C(g)</label><input className="input-box" type="number" value={goals.carbs} onChange={e => setGoals({ ...goals, carbs: e.target.value })} /></div>
+                <div><label style={{ fontSize: '0.8rem', color: 'var(--t2' }}>F(g)</label><input className="input-box" type="number" value={goals.fat} onChange={e => setGoals({ ...goals, fat: e.target.value })} /></div>
               </div>
               <button className="btn-main" onClick={() => { localStorage.setItem("calpy_goals", JSON.stringify(goals)); setIsEditing(false); }}>Save Goal</button>
             </div>
@@ -197,17 +237,17 @@ export default function CalpyDashboard() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
                 <div style={{ position: 'relative', width: 80, height: 80 }}>
                   <svg width="80" height="80" viewBox="0 0 80 80">
-                    <circle cx="40" cy="40" r="35" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="6"/>
+                    <circle cx="40" cy="40" r="35" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="6" />
                     <circle cx="40" cy="40" r="35" fill="none" stroke="var(--accent)" strokeWidth="6" strokeLinecap="round"
-                      strokeDasharray={`${2*Math.PI*35 * Math.min(totals.cal/goals.daily, 1)} 220`}
+                      strokeDasharray={`${2 * Math.PI * 35 * Math.min(totals.cal / goals.daily, 1)} 220`}
                       style={{ transform: 'rotate(-90deg)', transformOrigin: 'center' }}
                     />
                   </svg>
-                  <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.9rem', fontWeight:600 }}>{totals.cal}</div>
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem', fontWeight: 600 }}>{totals.cal}</div>
                 </div>
                 <div>
                   <div style={{ fontSize: '0.7rem', color: 'var(--t2)' }}>Remaining</div>
-                  <div style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--accent)' }}>{Math.max(0, goals.daily - totals.cal)} <small style={{fontSize:'0.6rem'}}>kcal</small></div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--accent)' }}>{Math.max(0, goals.daily - totals.cal)} <small style={{ fontSize: '0.6rem' }}>kcal</small></div>
                 </div>
               </div>
             </div>
@@ -226,7 +266,7 @@ export default function CalpyDashboard() {
                   <span className="macro-stats"><b>{Math.round(totals[m.k])}g</b> / {goals[m.k]}g</span>
                 </div>
                 <div className="macro-bar-bg">
-                  <div className="macro-bar-fill" style={{ width: `${Math.min((totals[m.k]/goals[m.k])*100, 100)}%`, background: m.c }} />
+                  <div className="macro-bar-fill" style={{ width: `${Math.min((totals[m.k] / goals[m.k]) * 100, 100)}%`, background: m.c }} />
                 </div>
               </div>
             ))}
@@ -249,11 +289,58 @@ export default function CalpyDashboard() {
               <><img src={img} className="cam-preview" alt="preview" /><button className="btn-main" style={{ marginTop: '1rem' }} onClick={processImage}>Analyze with AI</button></>
             )}
             {mode === 'analyzing' && <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--t2)' }}>Processing nutrition data...</div>}
+            {mode === 'notfood' && (
+              <div style={{ textAlign: 'center', padding: '3rem' }}>
+                <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>🚫</div>
+                <p style={{ color: 'var(--t2)', marginBottom: '1.5rem' }}>No food item detected</p>
+                <button className="btn-main" onClick={() => { setImg(null); setMode('idle'); }}>Try Again</button>
+              </div>
+            )}
             {mode === 'result' && result && (
               <div style={{ textAlign: 'center' }}>
-                <h2 style={{ fontSize: '1.4rem' }}>{result.foodName}</h2>
-                <div style={{ fontSize: '2.5rem', fontWeight: 700, color: 'var(--accent)', margin: '10px 0' }}>{result.calories} kcal</div>
-                <button className="btn-main" onClick={() => { setEntries([...entries, {...result, id: Date.now(), time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}]); setMode('idle'); }}>Add to Daily Log</button>
+                <h2 style={{ fontSize: '1.4rem', color: 'white' }}>{result.foodName}</h2>
+                <div style={{ fontSize: '2.5rem', fontWeight: 700, color: 'var(--accent)', margin: '10px 0' }}>
+                  {result.calories} kcal
+                </div>
+
+                <p style={{ color: 'var(--t2)', marginBottom: '1rem' }}>
+                  Is this correct?
+                </p>
+
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button
+                    className="btn-main"
+                    style={{ background: 'var(--accent)' }}
+                    onClick={() => {
+                      setEntries([
+                        ...entries,
+                        {
+                          ...result,
+                          id: Date.now(),
+                          time: new Date().toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })
+                        }
+                      ]);
+                      setMode('idle');
+                    }}
+                  >
+                    Yes
+                  </button>
+
+                  <button
+                    className="btn-main"
+                    style={{ background: 'var(--danger)', color: '#fff' }}
+                    onClick={() => {
+                      setResult(null);
+                      setImg(null);
+                      setMode('idle');
+                    }}
+                  >
+                    No
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -263,10 +350,10 @@ export default function CalpyDashboard() {
           <div className="card">
             <div className="card-label">Today's Intake</div>
             <div className="graph-container">
-              {['T','W','T','F','S','S','M'].map((d, i) => (
+              {['T', 'W', 'T', 'F', 'S', 'S', 'M'].map((d, i) => (
                 <div key={i} style={{ flex: 1, textAlign: 'center' }}>
                   <div className="graph-bar">
-                    <div className={`graph-fill ${i === 6 ? 'active' : ''}`} style={{ height: i === 6 ? `${Math.min((totals.cal/goals.daily)*100, 100)}%` : '12%' }} />
+                    <div className={`graph-fill ${i === 6 ? 'active' : ''}`} style={{ height: i === 6 ? `${Math.min((totals.cal / goals.daily) * 100, 100)}%` : '12%' }} />
                   </div>
                   <span style={{ fontSize: '0.6rem', color: 'var(--t3)', fontFamily: 'var(--mono)' }}>{d}</span>
                 </div>
