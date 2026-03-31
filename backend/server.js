@@ -1,53 +1,51 @@
-const dotenv = require('dotenv')
+const dotenv = require('dotenv');
 dotenv.config();
+
 const PORT = process.env.PORT || 3000;
-const express = require('express')
+
+const express = require('express');
 const app = express();
 
 const cors = require('cors');
-
 const mongoose = require('mongoose');
 
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-
 const allowedOrigins = [
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-    'https://calpy-ris.netlify.app',
-    'https://calpy-ris.netlify.app/'
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'https://calpy-ris.netlify.app'
 ];
 
-app.use(cors({
+const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       console.log("CORS Blocked Origin:", origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 const authRoutes = require('./routes/userLogin');
-
 app.use('/api/auth', authRoutes);
 
-
 app.get('/', (req, res) => {
-    res.send('Welcome to Calpy backend')
-})
+  res.send('Welcome to Calpy backend');
+});
 
 app.use((err, req, res, next) => {
   console.error(err.message);
   res.status(500).json({ error: err.message });
 });
-
 
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
