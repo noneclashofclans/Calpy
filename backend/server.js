@@ -12,7 +12,8 @@ const mongoose = require('mongoose');
 const allowedOrigins = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
-  'https://calpy-ris.netlify.app'
+  'https://calpy-ris.netlify.app',
+  'https://calpy-maj4.vercel.app'
 ];
 
 const corsOptions = {
