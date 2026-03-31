@@ -1087,7 +1087,7 @@ const LandingPage = () => {
 
                 <section className="cta-section">
                     <h2 className="cta-title">Start tracking today.<br />It's free.</h2>
-                    <p className="cta-sub">Join 50,000+ people already hitting their nutrition goals.</p>
+                    <p className="cta-sub">Join 100+ people already hitting their nutrition goals.</p>
                     <div className="hero-actions">
                         <Link to={user ? "/dashboard" : "/register"} className="btn-hero-primary">
                             {user ? "Back to Dashboard →" : "Create free account →"}

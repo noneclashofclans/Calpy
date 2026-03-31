@@ -46,7 +46,6 @@ const CSS = `
   .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 1.5rem; position: relative; }
   .card-label { font-family: var(--mono); font-size: 0.7rem; color: var(--t2); text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 1.5rem; }
 
-  /* MACRO ALIGNMENT FIX */
   .macro-item { margin-bottom: 1.5rem; }
   .macro-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
   .macro-label { font-size: 0.85rem; font-weight: 500; color: var(--t1); }
@@ -64,9 +63,33 @@ const CSS = `
   .input-box { width: 100%; background: #181818; border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem; color: #fff; font-family: var(--mono); margin-top: 5px; outline: none; margin-bottom: 10px; }
   .input-box:focus { border-color: var(--accent); }
 
-  .tl-entry { display: flex; align-items: center; gap: 0.75rem; padding: 1rem 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
-  .tl-name { font-size: 0.85rem; font-weight: 500; color: var(--t1); }
-  .tl-meta { font-size: 0.65rem; color: var(--t2); font-family: var(--mono); }
+  /* ── HISTORY ENTRY ── */
+  .tl-entry { display: flex; align-items: center; gap: 0.75rem; padding: 0.85rem 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+  .tl-entry:last-child { border-bottom: none; }
+
+  .tl-thumb {
+    width: 46px;
+    height: 46px;
+    border-radius: 10px;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+    background: #1a1a1a;
+  }
+  .tl-thumb-placeholder {
+    width: 46px;
+    height: 46px;
+    border-radius: 10px;
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+    background: #1a1a1a;
+    display: grid;
+    place-items: center;
+    font-size: 20px;
+  }
+
+  .tl-name { font-size: 0.85rem; font-weight: 500; color: var(--t1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tl-meta { font-size: 0.65rem; color: var(--t2); font-family: var(--mono); margin-top: 2px; }
 
   .graph-container { display: flex; align-items: flex-end; justify-content: space-between; height: 100px; gap: 8px; }
   .graph-bar { width: 100%; background: rgba(255,255,255,0.03); border-radius: 4px; position: relative; height: 100px; overflow: hidden; }
@@ -142,14 +165,11 @@ export default function CalpyDashboard() {
   const [goals, setGoals] = useState(JSON.parse(localStorage.getItem(goalsKey)) || { daily: 1980, protein: 150, carbs: 220, fat: 65 });
   const [entries, setEntries] = useState(JSON.parse(localStorage.getItem(entriesKey)) || []);
 
-
   useEffect(() => {
     localStorage.setItem(entriesKey, JSON.stringify(entries));
   }, [entries, entriesKey]);
 
-
   const [isEditing, setIsEditing] = useState(false);
-
   const [mode, setMode] = useState('idle');
   const [img, setImg] = useState(null);
   const [result, setResult] = useState(null);
@@ -229,9 +249,9 @@ export default function CalpyDashboard() {
               <label style={{ fontSize: '0.7rem', color: 'var(--t2)' }}>CALORIES</label>
               <input className="input-box" type="number" value={goals.daily} onChange={e => setGoals({ ...goals, daily: e.target.value })} />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-                <div><label style={{ fontSize: '0.8rem', color: 'var(--t2' }}>P(g)</label><input className="input-box" type="number" value={goals.protein} onChange={e => setGoals({ ...goals, protein: e.target.value })} /></div>
-                <div><label style={{ fontSize: '0.8rem', color: 'var(--t2' }}>C(g)</label><input className="input-box" type="number" value={goals.carbs} onChange={e => setGoals({ ...goals, carbs: e.target.value })} /></div>
-                <div><label style={{ fontSize: '0.8rem', color: 'var(--t2' }}>F(g)</label><input className="input-box" type="number" value={goals.fat} onChange={e => setGoals({ ...goals, fat: e.target.value })} /></div>
+                <div><label style={{ fontSize: '0.8rem', color: 'var(--t2)' }}>P(g)</label><input className="input-box" type="number" value={goals.protein} onChange={e => setGoals({ ...goals, protein: e.target.value })} /></div>
+                <div><label style={{ fontSize: '0.8rem', color: 'var(--t2)' }}>C(g)</label><input className="input-box" type="number" value={goals.carbs} onChange={e => setGoals({ ...goals, carbs: e.target.value })} /></div>
+                <div><label style={{ fontSize: '0.8rem', color: 'var(--t2)' }}>F(g)</label><input className="input-box" type="number" value={goals.fat} onChange={e => setGoals({ ...goals, fat: e.target.value })} /></div>
               </div>
               <button className="btn-main" onClick={() => { localStorage.setItem(goalsKey, JSON.stringify(goals)); setIsEditing(false); }}>Save Goal</button>
             </div>
@@ -306,11 +326,7 @@ export default function CalpyDashboard() {
                 <div style={{ fontSize: '2.5rem', fontWeight: 700, color: 'var(--accent)', margin: '10px 0' }}>
                   {result.calories} kcal
                 </div>
-
-                <p style={{ color: 'var(--t2)', marginBottom: '1rem' }}>
-                  Is this correct?
-                </p>
-
+                <p style={{ color: 'var(--t2)', marginBottom: '1rem' }}>Is this correct?</p>
                 <div style={{ display: 'flex', gap: '10px' }}>
                   <button
                     className="btn-main"
@@ -321,18 +337,17 @@ export default function CalpyDashboard() {
                         {
                           ...result,
                           id: Date.now(),
-                          time: new Date().toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })
+                          photo: img,           
+                          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                         }
                       ]);
+                      setImg(null);
+                      setResult(null);
                       setMode('idle');
                     }}
                   >
                     Yes
                   </button>
-
                   <button
                     className="btn-main"
                     style={{ background: 'var(--danger)', color: '#fff' }}
@@ -367,15 +382,29 @@ export default function CalpyDashboard() {
 
           <div className="card" style={{ flex: 1 }}>
             <div className="card-label">History</div>
-            {entries.length === 0 ? <p style={{ color: 'var(--t3)', textAlign: 'center' }}>Log a meal to start</p> : entries.map(e => (
-              <div className="tl-entry" key={e.id}>
-                <div style={{ flex: 1 }}>
-                  <div className="tl-name">{e.foodName}</div>
-                  <div className="tl-meta">{e.time} • {e.calories} kcal</div>
+            {entries.length === 0
+              ? <p style={{ color: 'var(--t3)', textAlign: 'center' }}>Log a meal to start</p>
+              : entries.map(e => (
+                <div className="tl-entry" key={e.id}>
+
+                  {e.photo
+                    ? <img src={e.photo} alt={e.foodName} className="tl-thumb" />
+                    : <div className="tl-thumb-placeholder">🍽️</div>
+                  }
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="tl-name">{e.foodName}</div>
+                    <div className="tl-meta">{e.time} • {e.calories} kcal</div>
+                  </div>
+
+                  <button
+                    style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', flexShrink: 0 }}
+                    onClick={() => setEntries(entries.filter(x => x.id !== e.id))}
+                  >✕</button>
+
                 </div>
-                <button style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer' }} onClick={() => setEntries(entries.filter(x => x.id !== e.id))}>✕</button>
-              </div>
-            ))}
+              ))
+            }
           </div>
         </aside>
       </div>
