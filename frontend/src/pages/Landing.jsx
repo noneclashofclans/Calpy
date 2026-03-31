@@ -928,10 +928,10 @@ const LandingPage = () => {
 
                 <div className="stats-strip">
                     {[
-                        { num: '2M+', label: 'Meals logged' },
-                        { num: '50k', label: 'Active users' },
-                        { num: '300+', label: 'Food categories' },
-                        { num: '98%', label: 'Goal success rate' },
+                        { num: '1K+', label: 'Meals logged' },
+                        { num: '100+', label: 'Active users' },
+                        { num: '1K+', label: 'Food categories' },
+                        { num: '99%', label: 'Goal success rate' },
                     ].map((s) => (
                         <div className="stat-item" key={s.label}>
                             <div className="stat-num"><span>{s.num}</span></div>
@@ -978,7 +978,7 @@ const LandingPage = () => {
                         {[
                             { n: '01', title: 'Create your account', desc: 'Sign up free in under 30 seconds. No credit card required.' },
                             { n: '02', title: 'Set your goal', desc: 'Tell us your target — lose weight, gain muscle, or maintain. We handle the math.' },
-                            { n: '03', title: 'Log & track', desc: 'Search foods, scan barcodes, or use quick-add. Watch your dashboard update in real time.' },
+                            { n: '03', title: 'Log & track', desc: 'Scan the food you will eat with your camera, and watch your dashboard update in real time.' },
                         ].map((s) => (
                             <div className="step" key={s.n}>
                                 <div className="step-num">{s.n}</div>
