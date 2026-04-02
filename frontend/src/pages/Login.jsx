@@ -479,15 +479,15 @@ const Login = () => {
 
                     <div className="stats">
                         <div>
-                            <div className="stat-num">2M+</div>
+                            <div className="stat-num">1K+</div>
                             <div className="stat-label">Meals logged</div>
                         </div>
                         <div>
-                            <div className="stat-num">50k</div>
+                            <div className="stat-num">100+</div>
                             <div className="stat-label">Active users</div>
                         </div>
                         <div>
-                            <div className="stat-num">98%</div>
+                            <div className="stat-num">99%</div>
                             <div className="stat-label">Goal success</div>
                         </div>
                     </div>

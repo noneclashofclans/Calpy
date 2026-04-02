@@ -91,10 +91,21 @@ const CSS = `
   .tl-name { font-size: 0.85rem; font-weight: 500; color: var(--t1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tl-meta { font-size: 0.65rem; color: var(--t2); font-family: var(--mono); margin-top: 2px; }
 
-  .graph-container { display: flex; align-items: flex-end; justify-content: space-between; height: 100px; gap: 8px; }
-  .graph-bar { width: 100%; background: rgba(255,255,255,0.03); border-radius: 4px; position: relative; height: 100px; overflow: hidden; }
-  .graph-fill { position: absolute; bottom: 0; width: 100%; background: var(--t3); transition: 0.6s ease; }
-  .graph-fill.active { background: var(--accent); }
+  /* ── GOAL NAG MODAL ── */
+  .goal-nag-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.8);
+    display: flex; align-items: center; justify-content: center; z-index: 999;
+    backdrop-filter: blur(4px);
+  }
+  .goal-nag-modal {
+    background: #111; border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 20px; padding: 2rem; max-width: 360px; width: 90%; text-align: center;
+  }
+  .goal-nag-dismiss {
+    margin-top: 0.75rem; background: none; border: none; color: var(--t2);
+    cursor: pointer; font-size: 0.8rem; font-family: var(--font);
+  }
+  .goal-nag-dismiss:hover { color: var(--t1); }
 
   @media (max-width: 1100px) { .body { grid-template-columns: 1fr; } }
 `;
@@ -155,34 +166,154 @@ Return ONLY this JSON with no explanation:
   return parsed;
 }
 
+function WeeklyChart({ entries, goals }) {
+  // Build last-7-days labels ending today
+  const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const today = new Date();
+  const labels = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() - (6 - i));
+    return dayNames[d.getDay()];
+  });
+
+  const buckets = Array.from({ length: 7 }, () => ({ cal: 0, protein: 0, carbs: 0 }));
+  entries.forEach(e => {
+    const entryDate = new Date(e.id); // id = Date.now() at log time
+    const diffDays = Math.round((today - entryDate) / 86400000);
+    const idx = 6 - diffDays;
+    if (idx >= 0 && idx <= 6) {
+      buckets[idx].cal     += e.calories || 0;
+      buckets[idx].protein += e.protein  || 0;
+      buckets[idx].carbs   += e.carbs    || 0;
+    }
+  });
+
+  const pct = (val, goal) => goal > 0 ? Math.min(Math.round((val / goal) * 100), 130) : 0;
+
+  const series = [
+    { label: 'Calories', data: buckets.map(b => pct(b.cal,     goals.daily)),   color: '#e8ff6e' },
+    { label: 'Protein',  data: buckets.map(b => pct(b.protein, goals.protein)), color: '#6bcf7f' },
+    { label: 'Carbs',    data: buckets.map(b => pct(b.carbs,   goals.carbs)),   color: '#f0a050' },
+  ];
+
+  const W = 272, H = 120, padL = 30, padR = 10, padT = 10, padB = 22;
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+  const minV = 0, maxV = 120;
+
+  const px = i => padL + (i / 6) * innerW;
+  const py = v => padT + (1 - (v - minV) / (maxV - minV)) * innerH;
+  const mkPath = data => data.map((v, i) => `${i === 0 ? 'M' : 'L'}${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(' ');
+
+  return (
+    <div className="card">
+      <div className="card-label">Weekly % of Goal</div>
+
+      
+      <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
+        {series.map(s => (
+          <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.65rem', color: '#6b6b6b', fontFamily: 'var(--mono)' }}>
+            <div style={{ width: 18, height: 2, background: s.color, borderRadius: 2 }} />
+            {s.label}
+          </div>
+        ))}
+      </div>
+
+      {/* Chart */}
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible' }}>
+        {/* Horizontal grid + Y labels */}
+        {[0, 50, 100].map(v => (
+          <g key={v}>
+            <line
+              x1={padL} y1={py(v)} x2={W - padR} y2={py(v)}
+              stroke={v === 100 ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.04)'}
+              strokeWidth="1"
+              strokeDasharray={v === 100 ? '3 3' : undefined}
+            />
+            <text x={padL - 4} y={py(v)} textAnchor="end" dominantBaseline="central"
+              style={{ fontSize: '7px', fill: '#3d3d3d', fontFamily: 'var(--mono)' }}>
+              {v}
+            </text>
+          </g>
+        ))}
+
+        {/* Series */}
+        {series.map(s => (
+          <g key={s.label}>
+            <path
+              d={mkPath(s.data)}
+              fill="none"
+              stroke={s.color}
+              strokeWidth="1.5"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+            {/* Dot on today (index 6) */}
+            <circle cx={px(6)} cy={py(s.data[6])} r="3" fill={s.color} stroke="#111" strokeWidth="1.5" />
+            {/* End value label */}
+            <text
+              x={px(6) + 6} y={py(s.data[6])}
+              dominantBaseline="central"
+              style={{ fontSize: '7px', fill: s.color, fontFamily: 'var(--mono)', fontWeight: 600 }}>
+              {s.data[6]}%
+            </text>
+          </g>
+        ))}
+
+        {/* X axis day labels */}
+        {labels.map((d, i) => (
+          <text key={i} x={px(i)} y={H - 2} textAnchor="middle"
+            style={{ fontSize: '7px', fill: i === 6 ? '#f0f0f0' : '#3d3d3d', fontFamily: 'var(--mono)' }}>
+            {d}
+          </text>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+
 export default function CalpyDashboard() {
   const navigate = useNavigate();
-  const [user, setUser] = useState(JSON.parse(localStorage.getItem("user")) || { username: "Unknown" });
+  const [user]            = useState(JSON.parse(localStorage.getItem("user")) || { username: "Unknown" });
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const goalsKey = `calpy_goals_${user.username}`;
+
+  const goalsKey   = `calpy_goals_${user.username}`;
   const entriesKey = `calpy_entries_${user.username}`;
 
-  const [goals, setGoals] = useState(JSON.parse(localStorage.getItem(goalsKey)) || { daily: 1980, protein: 150, carbs: 220, fat: 65 });
+  const [goals,   setGoals]   = useState(JSON.parse(localStorage.getItem(goalsKey))   || { daily: 0, protein: 0, carbs: 0, fat: 0 });
   const [entries, setEntries] = useState(JSON.parse(localStorage.getItem(entriesKey)) || []);
 
   useEffect(() => {
     localStorage.setItem(entriesKey, JSON.stringify(entries));
   }, [entries, entriesKey]);
 
-  const [isEditing, setIsEditing] = useState(false);
-  const [mode, setMode] = useState('idle');
-  const [img, setImg] = useState(null);
-  const [result, setResult] = useState(null);
+  const [isEditing,    setIsEditing]    = useState(false);
+  const [showGoalNag,  setShowGoalNag]  = useState(false);
+  const [mode,         setMode]         = useState('idle');
+  const [img,          setImg]          = useState(null);
+  const [result,       setResult]       = useState(null);
 
-  const videoRef = useRef(null);
+  const videoRef  = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
 
   const totals = entries.reduce((a, e) => ({
-    cal: a.cal + (e.calories || 0), protein: a.protein + (e.protein || 0), carbs: a.carbs + (e.carbs || 0), fat: a.fat + (e.fat || 0)
+    cal:     a.cal     + (e.calories || 0),
+    protein: a.protein + (e.protein  || 0),
+    carbs:   a.carbs   + (e.carbs    || 0),
+    fat:     a.fat     + (e.fat      || 0),
   }), { cal: 0, protein: 0, carbs: 0, fat: 0 });
 
+
   const startCamera = async () => {
+  
+    const allZero = !goals.daily && !goals.protein && !goals.carbs && !goals.fat;
+    if (allZero) { 
+        setShowGoalNag(true); 
+        return; 
+    }
+
     setMode('live');
     try {
       const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
@@ -217,7 +348,6 @@ export default function CalpyDashboard() {
     if (e) e.stopPropagation();
     localStorage.removeItem('user');
     localStorage.removeItem('token');
-    setUser(null);
     navigate('/login');
   };
 
@@ -226,12 +356,38 @@ export default function CalpyDashboard() {
       <style>{CSS}</style>
       <canvas ref={canvasRef} style={{ display: 'none' }} />
 
+      {showGoalNag && (
+        <div className="goal-nag-overlay" onClick={() => setShowGoalNag(false)}>
+          <div className="goal-nag-modal" onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🎯</div>
+            <h2 style={{ color: 'var(--t1)', fontSize: '1.1rem', fontWeight: 600, marginBottom: '0.5rem' }}>
+              Set your goals first
+            </h2>
+            <p style={{ color: 'var(--t2)', fontSize: '0.85rem', marginBottom: '1.5rem', lineHeight: 1.6 }}>
+              Before logging meals, set your daily calorie and macro targets so Calpy can track your progress accurately.
+            </p>
+            <button
+              className="btn-main"
+              onClick={() => { setShowGoalNag(false); setIsEditing(true); }}
+            >
+              Set Goals
+            </button>
+            <button className="goal-nag-dismiss" onClick={() => setShowGoalNag(false)}>
+              Maybe later
+            </button>
+          </div>
+        </div>
+      )}
+
       <header className="topbar">
         <Link className="t-logo" to="/">
           <div className="t-icon">🥗</div>
           <span className="t-name">Calpy</span>
         </Link>
-        <div className="user-profile" onClick={(e) => { e.stopPropagation(); setDropdownOpen(!dropdownOpen); }}>
+        <div
+          className="user-profile"
+          onClick={e => { e.stopPropagation(); setDropdownOpen(!dropdownOpen); }}
+        >
           <div className="avatar-circle">{user.username.charAt(0)}</div>
           <span className="t-name" style={{ fontSize: '0.8rem' }}>{user.username}</span>
           <div className={`dropdown-menu ${dropdownOpen ? 'show' : ''}`}>
@@ -242,18 +398,39 @@ export default function CalpyDashboard() {
       </header>
 
       <div className="body">
+
+        {/* LEFT PANEL */}
         <aside className="panel panel-left">
           {isEditing ? (
             <div className="card">
               <div className="card-label">Customize your goal</div>
               <label style={{ fontSize: '0.7rem', color: 'var(--t2)' }}>CALORIES</label>
-              <input className="input-box" type="number" value={goals.daily} onChange={e => setGoals({ ...goals, daily: e.target.value })} />
+              <input
+                className="input-box"
+                type="number"
+                value={goals.daily}
+                onChange={e => setGoals({ ...goals, daily: +e.target.value })}
+              />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-                <div><label style={{ fontSize: '0.8rem', color: 'var(--t2)' }}>P(g)</label><input className="input-box" type="number" value={goals.protein} onChange={e => setGoals({ ...goals, protein: e.target.value })} /></div>
-                <div><label style={{ fontSize: '0.8rem', color: 'var(--t2)' }}>C(g)</label><input className="input-box" type="number" value={goals.carbs} onChange={e => setGoals({ ...goals, carbs: e.target.value })} /></div>
-                <div><label style={{ fontSize: '0.8rem', color: 'var(--t2)' }}>F(g)</label><input className="input-box" type="number" value={goals.fat} onChange={e => setGoals({ ...goals, fat: e.target.value })} /></div>
+                <div>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--t2)' }}>P (g)</label>
+                  <input className="input-box" type="number" value={goals.protein} onChange={e => setGoals({ ...goals, protein: +e.target.value })} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--t2)' }}>C (g)</label>
+                  <input className="input-box" type="number" value={goals.carbs} onChange={e => setGoals({ ...goals, carbs: +e.target.value })} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--t2)' }}>F (g)</label>
+                  <input className="input-box" type="number" value={goals.fat} onChange={e => setGoals({ ...goals, fat: +e.target.value })} />
+                </div>
               </div>
-              <button className="btn-main" onClick={() => { localStorage.setItem(goalsKey, JSON.stringify(goals)); setIsEditing(false); }}>Save Goal</button>
+              <button
+                className="btn-main"
+                onClick={() => { localStorage.setItem(goalsKey, JSON.stringify(goals)); setIsEditing(false); }}
+              >
+                Save Goal
+              </button>
             </div>
           ) : (
             <div className="card">
@@ -262,16 +439,21 @@ export default function CalpyDashboard() {
                 <div style={{ position: 'relative', width: 80, height: 80 }}>
                   <svg width="80" height="80" viewBox="0 0 80 80">
                     <circle cx="40" cy="40" r="35" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="6" />
-                    <circle cx="40" cy="40" r="35" fill="none" stroke="var(--accent)" strokeWidth="6" strokeLinecap="round"
-                      strokeDasharray={`${2 * Math.PI * 35 * Math.min(totals.cal / goals.daily, 1)} 220`}
+                    <circle
+                      cx="40" cy="40" r="35" fill="none" stroke="var(--accent)" strokeWidth="6" strokeLinecap="round"
+                      strokeDasharray={`${2 * Math.PI * 35 * Math.min(totals.cal / (goals.daily || 1), 1)} 220`}
                       style={{ transform: 'rotate(-90deg)', transformOrigin: 'center' }}
                     />
                   </svg>
-                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem', fontWeight: 600 }}>{totals.cal}</div>
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem', fontWeight: 600 }}>
+                    {totals.cal}
+                  </div>
                 </div>
                 <div>
                   <div style={{ fontSize: '0.7rem', color: 'var(--t2)' }}>Remaining</div>
-                  <div style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--accent)' }}>{Math.max(0, goals.daily - totals.cal)} <small style={{ fontSize: '0.6rem' }}>kcal</small></div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--accent)' }}>
+                    {Math.max(0, goals.daily - totals.cal)} <small style={{ fontSize: '0.6rem' }}>kcal</small>
+                  </div>
                 </div>
               </div>
             </div>
@@ -281,8 +463,8 @@ export default function CalpyDashboard() {
             <div className="card-label">Others</div>
             {[
               { l: 'Protein', k: 'protein', c: '#6bcf7f' },
-              { l: 'Carbs', k: 'carbs', c: '#e8ff6e' },
-              { l: 'Fat', k: 'fat', c: '#f0a050' }
+              { l: 'Carbs',   k: 'carbs',   c: '#e8ff6e' },
+              { l: 'Fat',     k: 'fat',     c: '#f0a050' },
             ].map(m => (
               <div className="macro-item" key={m.k}>
                 <div className="macro-header">
@@ -290,29 +472,48 @@ export default function CalpyDashboard() {
                   <span className="macro-stats"><b>{Math.round(totals[m.k])}g</b> / {goals[m.k]}g</span>
                 </div>
                 <div className="macro-bar-bg">
-                  <div className="macro-bar-fill" style={{ width: `${Math.min((totals[m.k] / goals[m.k]) * 100, 100)}%`, background: m.c }} />
+                  <div
+                    className="macro-bar-fill"
+                    style={{ width: `${Math.min((totals[m.k] / (goals[m.k] || 1)) * 100, 100)}%`, background: m.c }}
+                  />
                 </div>
               </div>
             ))}
           </div>
         </aside>
 
+        {/* CENTRE PANEL */}
         <main className="panel">
           <div className="card" style={{ flex: 1 }}>
             <div className="card-label">Meal Scanner</div>
+
             {mode === 'idle' && (
               <div className="cam-area" onClick={startCamera}>
                 <span style={{ fontSize: '2rem' }}>📸</span>
                 <span style={{ fontWeight: 600, marginTop: '10px', color: 'var(--t2)' }}>Capture Food</span>
               </div>
             )}
+
             {mode === 'live' && (
-              <><video ref={videoRef} className="cam-video" autoPlay playsInline muted /><button className="btn-main" style={{ marginTop: '1rem' }} onClick={takePhoto}>Snap</button></>
+              <>
+                <video ref={videoRef} className="cam-video" autoPlay playsInline muted />
+                <button className="btn-main" style={{ marginTop: '1rem' }} onClick={takePhoto}>Snap</button>
+              </>
             )}
+
             {mode === 'preview' && (
-              <><img src={img} className="cam-preview" alt="preview" /><button className="btn-main" style={{ marginTop: '1rem' }} onClick={processImage}>Analyze with AI</button></>
+              <>
+                <img src={img} className="cam-preview" alt="preview" />
+                <button className="btn-main" style={{ marginTop: '1rem' }} onClick={processImage}>Analyze with AI</button>
+              </>
             )}
-            {mode === 'analyzing' && <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--t2)' }}>Processing nutrition data...</div>}
+
+            {mode === 'analyzing' && (
+              <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--t2)' }}>
+                Processing nutrition data...
+              </div>
+            )}
+
             {mode === 'notfood' && (
               <div style={{ textAlign: 'center', padding: '3rem' }}>
                 <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>🚫</div>
@@ -320,6 +521,7 @@ export default function CalpyDashboard() {
                 <button className="btn-main" onClick={() => { setImg(null); setMode('idle'); }}>Try Again</button>
               </div>
             )}
+
             {mode === 'result' && result && (
               <div style={{ textAlign: 'center' }}>
                 <h2 style={{ fontSize: '1.4rem', color: 'white' }}>{result.foodName}</h2>
@@ -336,10 +538,10 @@ export default function CalpyDashboard() {
                         ...entries,
                         {
                           ...result,
-                          id: Date.now(),
-                          photo: img,           
-                          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                        }
+                          id:    Date.now(),
+                          photo: img,
+                          time:  new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                        },
                       ]);
                       setImg(null);
                       setResult(null);
@@ -351,11 +553,7 @@ export default function CalpyDashboard() {
                   <button
                     className="btn-main"
                     style={{ background: 'var(--danger)', color: '#fff' }}
-                    onClick={() => {
-                      setResult(null);
-                      setImg(null);
-                      setMode('idle');
-                    }}
+                    onClick={() => { setResult(null); setImg(null); setMode('idle'); }}
                   >
                     No
                   </button>
@@ -366,46 +564,35 @@ export default function CalpyDashboard() {
         </main>
 
         <aside className="panel panel-right">
-          <div className="card">
-            <div className="card-label">Today's Intake</div>
-            <div className="graph-container">
-              {['T', 'W', 'T', 'F', 'S', 'S', 'M'].map((d, i) => (
-                <div key={i} style={{ flex: 1, textAlign: 'center' }}>
-                  <div className="graph-bar">
-                    <div className={`graph-fill ${i === 6 ? 'active' : ''}`} style={{ height: i === 6 ? `${Math.min((totals.cal / goals.daily) * 100, 100)}%` : '12%' }} />
-                  </div>
-                  <span style={{ fontSize: '0.6rem', color: 'var(--t3)', fontFamily: 'var(--mono)' }}>{d}</span>
-                </div>
-              ))}
-            </div>
-          </div>
 
+          <WeeklyChart entries={entries} goals={goals} />
+
+          
           <div className="card" style={{ flex: 1 }}>
             <div className="card-label">History</div>
             {entries.length === 0
               ? <p style={{ color: 'var(--t3)', textAlign: 'center' }}>Log a meal to start</p>
               : entries.map(e => (
                 <div className="tl-entry" key={e.id}>
-
                   {e.photo
                     ? <img src={e.photo} alt={e.foodName} className="tl-thumb" />
                     : <div className="tl-thumb-placeholder">🍽️</div>
                   }
-
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="tl-name">{e.foodName}</div>
                     <div className="tl-meta">{e.time} • {e.calories} kcal</div>
                   </div>
-
                   <button
                     style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', flexShrink: 0 }}
                     onClick={() => setEntries(entries.filter(x => x.id !== e.id))}
-                  >✕</button>
-
+                  >
+                    ✕
+                  </button>
                 </div>
               ))
             }
           </div>
+
         </aside>
       </div>
     </div>
