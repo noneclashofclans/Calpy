@@ -107,6 +107,64 @@ const CSS = `
   }
   .goal-nag-dismiss:hover { color: var(--t1); }
 
+  /* ── CONFETTI / CRACKER ── */
+  .confetti-canvas {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  .goal-toast {
+    position: fixed;
+    top: 72px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-20px);
+    background: var(--accent);
+    color: #000;
+    font-family: var(--font);
+    font-weight: 700;
+    font-size: 0.9rem;
+    padding: 0.6rem 1.4rem;
+    border-radius: 40px;
+    z-index: 9998;
+    opacity: 0;
+    transition: opacity 0.4s ease, transform 0.4s ease;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .goal-toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  /* ── IMPROVED WEEKLY CHART ── */
+  .weekly-chart-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.25rem 1.5rem 1rem;
+  }
+  .weekly-chart-legend {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.65rem;
+    color: var(--t2);
+    font-family: var(--mono);
+  }
+  .legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
   @media (max-width: 1100px) { .body { grid-template-columns: 1fr; } }
 `;
 
@@ -166,9 +224,58 @@ Return ONLY this JSON with no explanation:
   return parsed;
 }
 
+/* ─── Confetti launcher ─── */
+function launchConfetti(canvasEl) {
+  const ctx = canvasEl.getContext('2d');
+  canvasEl.width = window.innerWidth;
+  canvasEl.height = window.innerHeight;
+
+  const COLORS = ['#e8ff6e', '#ff6b6b', '#6bcf7f', '#61d4f0', '#f0a050', '#c78eff'];
+  const PARTICLES = 140;
+
+  const particles = Array.from({ length: PARTICLES }, () => ({
+    x: Math.random() * canvasEl.width,
+    y: Math.random() * canvasEl.height * 0.4 - canvasEl.height * 0.1,
+    vx: (Math.random() - 0.5) * 6,
+    vy: Math.random() * -8 - 4,
+    w: Math.random() * 8 + 4,
+    h: Math.random() * 4 + 3,
+    rot: Math.random() * 360,
+    rotV: (Math.random() - 0.5) * 10,
+    color: COLORS[Math.floor(Math.random() * COLORS.length)],
+    alpha: 1,
+  }));
+
+  let frame = 0;
+  const MAX_FRAMES = 140;
+
+  function draw() {
+    ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+    particles.forEach(p => {
+      p.x += p.vx;
+      p.vy += 0.25;
+      p.y += p.vy;
+      p.rot += p.rotV;
+      p.alpha = Math.max(0, 1 - frame / MAX_FRAMES);
+
+      ctx.save();
+      ctx.globalAlpha = p.alpha;
+      ctx.translate(p.x, p.y);
+      ctx.rotate((p.rot * Math.PI) / 180);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      ctx.restore();
+    });
+    frame++;
+    if (frame < MAX_FRAMES) requestAnimationFrame(draw);
+    else ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+  }
+  draw();
+}
+
+/* ─── Improved Weekly Chart ─── */
 function WeeklyChart({ entries, goals }) {
-  // Build last-7-days labels ending today
-  const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const today = new Date();
   const labels = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(today);
@@ -178,94 +285,170 @@ function WeeklyChart({ entries, goals }) {
 
   const buckets = Array.from({ length: 7 }, () => ({ cal: 0, protein: 0, carbs: 0 }));
   entries.forEach(e => {
-    const entryDate = new Date(e.id); // id = Date.now() at log time
+    const entryDate = new Date(e.id);
     const diffDays = Math.round((today - entryDate) / 86400000);
     const idx = 6 - diffDays;
     if (idx >= 0 && idx <= 6) {
-      buckets[idx].cal     += e.calories || 0;
-      buckets[idx].protein += e.protein  || 0;
-      buckets[idx].carbs   += e.carbs    || 0;
+      buckets[idx].cal += e.calories || 0;
+      buckets[idx].protein += e.protein || 0;
+      buckets[idx].carbs += e.carbs || 0;
     }
   });
 
   const pct = (val, goal) => goal > 0 ? Math.min(Math.round((val / goal) * 100), 130) : 0;
 
   const series = [
-    { label: 'Calories', data: buckets.map(b => pct(b.cal,     goals.daily)),   color: '#e8ff6e' },
-    { label: 'Protein',  data: buckets.map(b => pct(b.protein, goals.protein)), color: '#6bcf7f' },
-    { label: 'Carbs',    data: buckets.map(b => pct(b.carbs,   goals.carbs)),   color: '#f0a050' },
+    { label: 'Calories', data: buckets.map(b => pct(b.cal, goals.daily)), color: '#e8ff6e' },
+    { label: 'Protein', data: buckets.map(b => pct(b.protein, goals.protein)), color: '#6bcf7f' },
+    { label: 'Carbs', data: buckets.map(b => pct(b.carbs, goals.carbs)), color: '#f0a050' },
   ];
 
-  const W = 272, H = 120, padL = 30, padR = 10, padT = 10, padB = 22;
+  const W = 280, H = 140;
+  const padL = 28, padR = 14, padT = 12, padB = 26;
   const innerW = W - padL - padR;
   const innerH = H - padT - padB;
   const minV = 0, maxV = 120;
 
   const px = i => padL + (i / 6) * innerW;
-  const py = v => padT + (1 - (v - minV) / (maxV - minV)) * innerH;
-  const mkPath = data => data.map((v, i) => `${i === 0 ? 'M' : 'L'}${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(' ');
+  const py = v => padT + (1 - (Math.min(v, maxV) - minV) / (maxV - minV)) * innerH;
+
+  const mkPath = data =>
+    data.map((v, i) => `${i === 0 ? 'M' : 'L'}${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(' ');
+
+  const mkArea = data => {
+    const line = data.map((v, i) => `${i === 0 ? 'M' : 'L'}${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(' ');
+    return `${line} L${px(6).toFixed(1)},${py(0).toFixed(1)} L${px(0).toFixed(1)},${py(0).toFixed(1)} Z`;
+  };
+
+  const todayIdx = 6;
 
   return (
-    <div className="card">
+    <div className="weekly-chart-card">
       <div className="card-label">Weekly % of Goal</div>
 
-      
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.9rem', flexWrap: 'wrap' }}>
+      <div className="weekly-chart-legend">
         {series.map(s => (
-          <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.65rem', color: '#6b6b6b', fontFamily: 'var(--mono)' }}>
-            <div style={{ width: 18, height: 2, background: s.color, borderRadius: 2 }} />
+          <div className="legend-item" key={s.label}>
+            <div className="legend-dot" style={{ background: s.color }} />
             {s.label}
           </div>
         ))}
       </div>
 
-      {/* Chart */}
       <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible' }}>
-        {/* Horizontal grid + Y labels */}
+        <defs>
+          {series.map(s => (
+            <linearGradient key={s.label} id={`grad-${s.label}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={s.color} stopOpacity="0.18" />
+              <stop offset="100%" stopColor={s.color} stopOpacity="0" />
+            </linearGradient>
+          ))}
+        </defs>
+
+        {/* Grid lines */}
         {[0, 50, 100].map(v => (
           <g key={v}>
             <line
               x1={padL} y1={py(v)} x2={W - padR} y2={py(v)}
-              stroke={v === 100 ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.04)'}
-              strokeWidth="1"
-              strokeDasharray={v === 100 ? '3 3' : undefined}
+              stroke={v === 100 ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.04)'}
+              strokeWidth={v === 100 ? 1 : 0.5}
+              strokeDasharray={v === 100 ? '4 3' : undefined}
             />
-            <text x={padL - 4} y={py(v)} textAnchor="end" dominantBaseline="central"
-              style={{ fontSize: '7px', fill: '#3d3d3d', fontFamily: 'var(--mono)' }}>
+            <text
+              x={padL - 5} y={py(v)}
+              textAnchor="end"
+              dominantBaseline="central"
+              style={{ fontSize: '7px', fill: v === 100 ? 'rgba(255,255,255,0.35)' : '#3d3d3d', fontFamily: 'var(--mono)' }}
+            >
               {v}
             </text>
           </g>
         ))}
 
-        {/* Series */}
+        {/* 100% label on right */}
+        <text
+          x={W - padR + 3} y={py(100)}
+          dominantBaseline="central"
+          style={{ fontSize: '7px', fill: 'rgba(255,255,255,0.25)', fontFamily: 'var(--mono)' }}
+        >
+          goal
+        </text>
+
+        {/* Today column highlight */}
+        <rect
+          x={px(todayIdx) - 14}
+          y={padT}
+          width={28}
+          height={innerH}
+          rx={4}
+          fill="rgba(255,255,255,0.025)"
+        />
+
+        {/* Area fills */}
         {series.map(s => (
-          <g key={s.label}>
-            <path
-              d={mkPath(s.data)}
-              fill="none"
-              stroke={s.color}
-              strokeWidth="1.5"
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
-            {/* Dot on today (index 6) */}
-            <circle cx={px(6)} cy={py(s.data[6])} r="3" fill={s.color} stroke="#111" strokeWidth="1.5" />
-            {/* End value label */}
+          <path
+            key={s.label + '-area'}
+            d={mkArea(s.data)}
+            fill={`url(#grad-${s.label})`}
+          />
+        ))}
+
+        {/* Lines */}
+        {series.map(s => (
+          <path
+            key={s.label + '-line'}
+            d={mkPath(s.data)}
+            fill="none"
+            stroke={s.color}
+            strokeWidth="1.5"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+        ))}
+
+        {/* Dots on today */}
+        {series.map(s => (
+          <g key={s.label + '-dot'}>
+            {/* Outer ring */}
+            <circle cx={px(todayIdx)} cy={py(s.data[todayIdx])} r="5" fill="none" stroke={s.color} strokeWidth="1" strokeOpacity="0.35" />
+            {/* Inner dot */}
+            <circle cx={px(todayIdx)} cy={py(s.data[todayIdx])} r="2.5" fill={s.color} />
+            {/* Value label */}
             <text
-              x={px(6) + 6} y={py(s.data[6])}
+              x={px(todayIdx) + 8}
+              y={py(s.data[todayIdx])}
               dominantBaseline="central"
-              style={{ fontSize: '7px', fill: s.color, fontFamily: 'var(--mono)', fontWeight: 600 }}>
-              {s.data[6]}%
+              style={{ fontSize: '7.5px', fill: s.color, fontFamily: 'var(--mono)', fontWeight: 600 }}
+            >
+              {s.data[todayIdx]}%
             </text>
           </g>
         ))}
 
-        {/* X axis day labels */}
+        {/* X axis */}
         {labels.map((d, i) => (
-          <text key={i} x={px(i)} y={H - 2} textAnchor="middle"
-            style={{ fontSize: '7px', fill: i === 6 ? '#f0f0f0' : '#3d3d3d', fontFamily: 'var(--mono)' }}>
-            {d}
-          </text>
+          <g key={i}>
+            {i === todayIdx && (
+              <rect
+                x={px(i) - 10} y={H - padB + 4}
+                width={20} height={13}
+                rx={4}
+                fill="rgba(232,255,110,0.12)"
+              />
+            )}
+            <text
+              x={px(i)} y={H - padB + 11}
+              textAnchor="middle"
+              style={{
+                fontSize: '7.5px',
+                fill: i === todayIdx ? '#e8ff6e' : '#3d3d3d',
+                fontFamily: 'var(--mono)',
+                fontWeight: i === todayIdx ? 600 : 400,
+              }}
+            >
+              {d}
+            </text>
+          </g>
         ))}
       </svg>
     </div>
@@ -275,45 +458,54 @@ function WeeklyChart({ entries, goals }) {
 
 export default function CalpyDashboard() {
   const navigate = useNavigate();
-  const [user]            = useState(JSON.parse(localStorage.getItem("user")) || { username: "Unknown" });
+  const [user] = useState(JSON.parse(localStorage.getItem("user")) || { username: "Unknown" });
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  const goalsKey   = `calpy_goals_${user.username}`;
+  const goalsKey = `calpy_goals_${user.username}`;
   const entriesKey = `calpy_entries_${user.username}`;
 
-  const [goals,   setGoals]   = useState(JSON.parse(localStorage.getItem(goalsKey))   || { daily: 0, protein: 0, carbs: 0, fat: 0 });
+  const [goals, setGoals] = useState(JSON.parse(localStorage.getItem(goalsKey)) || { daily: 0, protein: 0, carbs: 0, fat: 0 });
   const [entries, setEntries] = useState(JSON.parse(localStorage.getItem(entriesKey)) || []);
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [showGoalNag, setShowGoalNag] = useState(false);
+  const [mode, setMode] = useState('idle');
+  const [img, setImg] = useState(null);
+  const [result, setResult] = useState(null);
+  const [showToast, setShowToast] = useState(false);
+
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const confettiRef = useRef(null);
+  const streamRef = useRef(null);
+  const prevGoalMetRef = useRef(false);
 
   useEffect(() => {
     localStorage.setItem(entriesKey, JSON.stringify(entries));
   }, [entries, entriesKey]);
 
-  const [isEditing,    setIsEditing]    = useState(false);
-  const [showGoalNag,  setShowGoalNag]  = useState(false);
-  const [mode,         setMode]         = useState('idle');
-  const [img,          setImg]          = useState(null);
-  const [result,       setResult]       = useState(null);
-
-  const videoRef  = useRef(null);
-  const canvasRef = useRef(null);
-  const streamRef = useRef(null);
-
   const totals = entries.reduce((a, e) => ({
-    cal:     a.cal     + (e.calories || 0),
-    protein: a.protein + (e.protein  || 0),
-    carbs:   a.carbs   + (e.carbs    || 0),
-    fat:     a.fat     + (e.fat      || 0),
+    cal: a.cal + (e.calories || 0),
+    protein: a.protein + (e.protein || 0),
+    carbs: a.carbs + (e.carbs || 0),
+    fat: a.fat + (e.fat || 0),
   }), { cal: 0, protein: 0, carbs: 0, fat: 0 });
 
+  useEffect(() => {
+    if (!goals.daily) return;
+    const goalMet = totals.cal >= goals.daily;
+    if (goalMet && !prevGoalMetRef.current) {
+      // trigger confetti + toast
+      if (confettiRef.current) launchConfetti(confettiRef.current);
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3500);
+    }
+    prevGoalMetRef.current = goalMet;
+  }, [totals.cal, goals.daily]);
 
   const startCamera = async () => {
-  
     const allZero = !goals.daily && !goals.protein && !goals.carbs && !goals.fat;
-    if (allZero) { 
-        setShowGoalNag(true); 
-        return; 
-    }
-
+    if (allZero) { setShowGoalNag(true); return; }
     setMode('live');
     try {
       const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
@@ -356,6 +548,12 @@ export default function CalpyDashboard() {
       <style>{CSS}</style>
       <canvas ref={canvasRef} style={{ display: 'none' }} />
 
+      <canvas ref={confettiRef} className="confetti-canvas" />
+
+      <div className={`goal-toast ${showToast ? 'show' : ''}`}>
+        🎉 Daily calorie goal reached!
+      </div>
+
       {showGoalNag && (
         <div className="goal-nag-overlay" onClick={() => setShowGoalNag(false)}>
           <div className="goal-nag-modal" onClick={e => e.stopPropagation()}>
@@ -366,10 +564,7 @@ export default function CalpyDashboard() {
             <p style={{ color: 'var(--t2)', fontSize: '0.85rem', marginBottom: '1.5rem', lineHeight: 1.6 }}>
               Before logging meals, set your daily calorie and macro targets so Calpy can track your progress accurately.
             </p>
-            <button
-              className="btn-main"
-              onClick={() => { setShowGoalNag(false); setIsEditing(true); }}
-            >
+            <button className="btn-main" onClick={() => { setShowGoalNag(false); setIsEditing(true); }}>
               Set Goals
             </button>
             <button className="goal-nag-dismiss" onClick={() => setShowGoalNag(false)}>
@@ -438,21 +633,21 @@ export default function CalpyDashboard() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
                 <div style={{ position: 'relative', width: 80, height: 80 }}>
                   <svg width="80" height="80" viewBox="0 0 80 80">
-                    <circle cx="40" cy="40" r="35" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="6" />
+                    <circle cx="40" cy="40" r="35" fill="none" stroke="rgba(255, 255, 255, 0.1)" strokeWidth="6" />
                     <circle
                       cx="40" cy="40" r="35" fill="none" stroke="var(--accent)" strokeWidth="6" strokeLinecap="round"
                       strokeDasharray={`${2 * Math.PI * 35 * Math.min(totals.cal / (goals.daily || 1), 1)} 220`}
                       style={{ transform: 'rotate(-90deg)', transformOrigin: 'center' }}
                     />
                   </svg>
-                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem', fontWeight: 600 }}>
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', fontWeight: 600, color: 'grey' }}>
                     {totals.cal}
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--t2)' }}>Remaining</div>
-                  <div style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--accent)' }}>
-                    {Math.max(0, goals.daily - totals.cal)} <small style={{ fontSize: '0.6rem' }}>kcal</small>
+                  <div style={{ fontSize: '0.9rem', color: 'var(--t2)' }}>Remaining</div>
+                  <div style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--accent)' }}>
+                    {Math.max(0, goals.daily - totals.cal)} <small style={{ fontSize: '0.8rem' }}>kcal</small>
                   </div>
                 </div>
               </div>
@@ -463,8 +658,8 @@ export default function CalpyDashboard() {
             <div className="card-label">Others</div>
             {[
               { l: 'Protein', k: 'protein', c: '#6bcf7f' },
-              { l: 'Carbs',   k: 'carbs',   c: '#e8ff6e' },
-              { l: 'Fat',     k: 'fat',     c: '#f0a050' },
+              { l: 'Carbs', k: 'carbs', c: '#e8ff6e' },
+              { l: 'Fat', k: 'fat', c: '#f0a050' },
             ].map(m => (
               <div className="macro-item" key={m.k}>
                 <div className="macro-header">
@@ -538,9 +733,9 @@ export default function CalpyDashboard() {
                         ...entries,
                         {
                           ...result,
-                          id:    Date.now(),
+                          id: Date.now(),
                           photo: img,
-                          time:  new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                         },
                       ]);
                       setImg(null);
@@ -563,11 +758,11 @@ export default function CalpyDashboard() {
           </div>
         </main>
 
+        {/* RIGHT PANEL */}
         <aside className="panel panel-right">
 
           <WeeklyChart entries={entries} goals={goals} />
 
-          
           <div className="card" style={{ flex: 1 }}>
             <div className="card-label">History</div>
             {entries.length === 0
