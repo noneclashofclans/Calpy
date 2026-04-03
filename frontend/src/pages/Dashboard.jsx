@@ -22,6 +22,10 @@ const CSS = `
     --mono: 'Geist Mono', monospace;
   }
 
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
   body { background: var(--bg); color: var(--t1); font-family: var(--font); overflow-x: hidden; }
   .calpy { min-height: 100vh; display: flex; flex-direction: column; }
   
@@ -473,6 +477,7 @@ export default function CalpyDashboard() {
   const [img, setImg] = useState(null);
   const [result, setResult] = useState(null);
   const [showToast, setShowToast] = useState(false);
+  const [doing, setdoing] = useState(false);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -526,6 +531,7 @@ export default function CalpyDashboard() {
 
   const processImage = async () => {
     setMode('analyzing');
+    setdoing(true);
     try {
       const data = await analyzeFood(img.split(',')[1]);
       setResult(data);
@@ -533,6 +539,9 @@ export default function CalpyDashboard() {
     } catch (e) {
       alert(e.message);
       setMode('idle');
+    }
+    finally {
+      setdoing(false);
     }
   };
 
@@ -705,6 +714,16 @@ export default function CalpyDashboard() {
 
             {mode === 'analyzing' && (
               <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--t2)' }}>
+                {doing && (
+                  <div style={{
+                    width: '40px', height: '40px',
+                    border: '3px solid rgba(255,255,255,0.1)',
+                    borderTop: '3px solid var(--accent)',
+                    borderRadius: '50%',
+                    animation: 'spin 0.8s linear infinite',
+                    margin: '0 auto 1rem',
+                  }} />
+                )}
                 Processing nutrition data...
               </div>
             )}
